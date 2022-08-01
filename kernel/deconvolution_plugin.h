@@ -4,6 +4,7 @@
 
 #include <assert.h>
 
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -83,12 +84,7 @@ class DeconvolutionPlugin : public ConvolutionPlugin {
         mParam.mInputChannel = inDims.d[0];
         mParam.mH = inDims.d[1];
         mParam.mW = inDims.d[2];
-    }
 
-    int enqueue(
-        int batchSize, const void* const* inputs, void* const* outputs,
-        void* workspace, cudaStream_t stream) noexcept override {
-        std::cout << *this;
         // NOTE: kernel 需要做两个变换:
         // 1. IOHW -> OIHW
         // 2. HW 需要中心旋转
@@ -113,6 +109,21 @@ class DeconvolutionPlugin : public ConvolutionPlugin {
         }
         mKernelWeights = kernelWeights;
 
+        mParam.mOrigH = mParam.mH;
+        mParam.mOrigW = mParam.mW;
+        mParam.mOrigStrideH = mParam.mStrideH;
+        mParam.mOrigStrideW = mParam.mStrideW;
+
+        mParam.mH = (mParam.mH - 1) * mParam.mStrideH + 1;
+        mParam.mW = (mParam.mW - 1) * mParam.mStrideW + 1;
+
+        mParam.mStrideH = 1;
+        mParam.mStrideW = 1;
+    }
+
+    int enqueue(
+        int batchSize, const void* const* inputs, void* const* outputs,
+        void* workspace, cudaStream_t stream) noexcept override {
         // NOTE: deconv 还有一种等价的计算方法是: 针对 input 中 CHW 的每一个点,
         // 与 Chw 的 kernel 相乘并求和, 得到 hw 大小的数据, 平铺到输出的一个
         // feature map 中
@@ -122,17 +133,9 @@ class DeconvolutionPlugin : public ConvolutionPlugin {
         float* input =
             InflateDeconvolutionInput((const float*)inputs[0], mParam, stream);
 
-        mParam.mH = (mParam.mH - 1) * mParam.mStrideH + 1;
-        mParam.mW = (mParam.mW - 1) * mParam.mStrideW + 1;
-
-        mParam.mStrideH = 1;
-        mParam.mStrideW = 1;
-
-        void** tmp;
-        *tmp = input;
-        std::cout << *this;
         return ConvolutionPlugin::enqueue(
-            batchSize, tmp, outputs, workspace, stream);
+            batchSize, std::array<void*, 1>{input}.data(), outputs, workspace,
+            stream);
     }
 
    private:

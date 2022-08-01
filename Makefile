@@ -1,8 +1,11 @@
+KERNEL_OPT:=-DOPT_SOFTMAX -DOPT_CONVOLUTION
+
 CPPFLAGS := -I /opt/anaconda3/envs/cuda-11/include/ -I/usr/include/opencv4
+CPPFLAGS += ${KERNEL_OPT}
 # CPPFLAGS += -DINT8
 CXXFLAGS := -g -O0 -MMD -Wno-deprecated-declarations
 LDFLAGS := -L/opt/anaconda3/envs/cuda-11/lib -L/opt/anaconda3/envs/cuda-11/lib64 -L${PWD}/TensorRT/build/out
-LDLIBS := -lnvcaffeparser -lnvinfer -lnvinfer_plugin -lcudnn -lcudart -lstdc++ -lopencv_core -lopencv_imgproc -lopencv_imgcodecs
+LDLIBS := -lnvcaffeparser -lnvinfer -lnvinfer_plugin -lcudnn -lcudart -lcublas -lstdc++ -lopencv_core -lopencv_imgproc -lopencv_imgcodecs
 LDLIBS += -lnvonnxparser
 
 NVCC := /opt/anaconda3/envs/cuda-11/bin/nvcc
@@ -11,6 +14,7 @@ OBJ := $(patsubst %.cpp,%.o,${SRC})
 APP := $(patsubst %.cpp,%.elf,${SRC})
 RUN_APP := $(patsubst %.cpp,run-%,${SRC})
 TEST_APP := $(patsubst %.cpp,test-%,${SRC})
+PROFILE_APP := $(patsubst %.cpp,profile-%,${SRC})
 
 all: ${APP}
 
@@ -21,7 +25,7 @@ CUDA_KERNEL_SRC:=$(wildcard kernel/*.cu)
 CUDA_OBJ := $(patsubst %.cu,%.o,${CUDA_KERNEL_SRC})
 
 %.o:%.cu
-	${NVCC} -c $^ -o $@
+	${NVCC} ${KERNEL_OPT} -c $^ -o $@
 
 .PRECIOUS: ${CUDA_OBJ} ${OBJ}
 
@@ -33,6 +37,11 @@ ${RUN_APP}:run-%:%.elf
 
 ${TEST_APP}:test-%:%.elf
 	@LD_LIBRARY_PATH="${PWD}/TensorRT/build/out:/opt/anaconda3/envs/cuda-11/lib64:/opt/anaconda3/envs/cuda-11/lib"  python3 ./run-test.py $<
+
+${PROFILE_APP}:profile-%:%.elf
+	@rm -rf /tmp/profile*; \
+	LD_LIBRARY_PATH="${PWD}/TensorRT/build/out:/opt/anaconda3/envs/cuda-11/lib64:/opt/anaconda3/envs/cuda-11/lib"  nsys profile -c cudaProfilerApi -o /tmp/profile ./$<; \
+	nsys-ui /tmp/profile.nsys-rep
 
 test-all:${TEST_APP}
 

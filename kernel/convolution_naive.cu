@@ -7,7 +7,7 @@
 #define IS_FLOAT (param.mType == 0)
 
 template <class T, class T2>
-__global__ void ConvKernel(
+__global__ void ConvKernelNaive(
     T* dst, const T* src, ConvolutionParam param, int output_h, int output_w,
     T* kernel, T* bias) {
     int global_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -93,7 +93,7 @@ __global__ void ConvKernel(
     dst[channel * output_h * output_w + output_x * output_w + output_y] = sum;
 }
 
-void Convolution(
+void ConvolutionNaive(
     void* dst, const void* src, struct ConvolutionParam param, void* kernel,
     void* bias, void* workspace, cudaStream_t stream) {
     //  input channel: 1 output channel: 20 h: 28 w: 28 kernel: 5 5 stride: 1 1
@@ -112,25 +112,6 @@ void Convolution(
     int dilation_h = param.mDilationH;
     int dilation_w = param.mDilationW;
 
-    int size = IS_FLOAT ? 4 : 1;
-    void* kernelWeights = workspace;
-    void* biasWeights = NULL;
-    if (group == 1) {
-        cudaMemcpy(
-            kernelWeights, kernel,
-            input_channel * output_channel * kernel_h * kernel_w * size,
-            cudaMemcpyHostToDevice);
-    } else {
-        cudaMemcpy(
-            kernelWeights, kernel, input_channel * kernel_h * kernel_w * size,
-            cudaMemcpyHostToDevice);
-    }
-    if (bias != NULL) {
-        biasWeights = (char*)workspace + param.mKernelWeightsSize * size;
-        cudaMemcpy(
-            biasWeights, bias, output_channel * size, cudaMemcpyHostToDevice);
-    }
-
     // NOTE: `floor` for convolution
     int output_h =
         (h - (dilation_h * (kernel_h - 1) + 1) + 2 * padding_h) / stride_h + 1;
@@ -139,14 +120,14 @@ void Convolution(
 
     int total_size = output_channel * output_h * output_w;
     if (IS_FLOAT) {
-        ConvKernel<float, float>
+        ConvKernelNaive<float, float>
             <<<(int)(total_size / 128) + 1, 128, 0, stream>>>(
                 (float*)dst, (const float*)src, param, output_h, output_w,
-                (float*)kernelWeights, (float*)biasWeights);
+                (float*)kernel, (float*)bias);
     } else {
-        ConvKernel<int8_t, int>
+        ConvKernelNaive<int8_t, int>
             <<<(int)(total_size / 128) + 1, 128, 0, stream>>>(
                 (int8_t*)dst, (const int8_t*)src, param, output_h, output_w,
-                (int8_t*)kernelWeights, (int8_t*)biasWeights);
+                (int8_t*)kernel, (int8_t*)bias);
     }
 }
