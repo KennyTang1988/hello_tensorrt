@@ -1,6 +1,7 @@
+KERNEL_OPT:=-DOPT_SOFTMAX -DOPT_CONVOLUTION
+
 CPPFLAGS := -I /opt/anaconda3/envs/cuda-11/include/ -I/usr/include/opencv4
-CPPFLAGS += -DCONV_ALGORITHM=ConvolutionNaive
-# CPPFLAGS += -DCONV_ALGORITHM=ConvolutionIm2Col
+CPPFLAGS += ${KERNEL_OPT}
 # CPPFLAGS += -DINT8
 CXXFLAGS := -g -O0 -MMD -Wno-deprecated-declarations
 LDFLAGS := -L/opt/anaconda3/envs/cuda-11/lib -L/opt/anaconda3/envs/cuda-11/lib64 -L${PWD}/TensorRT/build/out
@@ -23,7 +24,7 @@ CUDA_KERNEL_SRC:=$(wildcard kernel/*.cu)
 CUDA_OBJ := $(patsubst %.cu,%.o,${CUDA_KERNEL_SRC})
 
 %.o:%.cu
-	${NVCC} -c $^ -o $@
+	${NVCC} ${KERNEL_OPT} -c $^ -o $@
 
 .PRECIOUS: ${CUDA_OBJ} ${OBJ}
 

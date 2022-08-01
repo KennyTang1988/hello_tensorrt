@@ -7,6 +7,24 @@ __global__ void Exp(float* output, float* input, int N) {
     }
 }
 
+#ifdef OPT_SOFTMAX
+__global__ void SumAndDivid(
+    float* output, int x, int y, int z, int x_mul, int y_mul, int z_mul) {
+    int output_x = blockIdx.x;
+    int output_y = blockIdx.y;
+    __shared__ float sum;
+    sum = 0.0f;
+    __syncthreads();
+    for (int i = threadIdx.x; i < z; i += blockDim.x) {
+        atomicAdd(
+            &sum, output[output_x * x_mul + output_y * y_mul + i * z_mul]);
+    }
+    __syncthreads();
+    for (int i = threadIdx.x; i < z; i += blockDim.x) {
+        output[output_x * x_mul + output_y * y_mul + i * z_mul] /= sum;
+    }
+}
+#else
 __global__ void Divid(
     float* output, float* sum, int x, int y, int z, int x_mul, int y_mul,
     int z_mul) {
@@ -35,6 +53,7 @@ __global__ void Sum(
             output[output_x * x_mul + output_y * y_mul + i * z_mul]);
     }
 }
+#endif
 
 void Softmax(
     float* output, float* input, int* dims, int axis, cudaStream_t stream) {
@@ -69,6 +88,11 @@ void Softmax(
             z_mul = 1;
             break;
     }
+#ifdef OPT_SOFTMAX
+    int N = x * y * z;
+    Exp<<<int(N / 128) + 1, 128, 0, stream>>>(output, input, N);
+    SumAndDivid<<<dim3(x, y), 128>>>(output, x, y, z, x_mul, y_mul, z_mul);
+#else
     int total_sum = x * y;
     float* sum;
     cudaMalloc(&sum, total_sum * 4);
@@ -82,4 +106,5 @@ void Softmax(
     Divid<<<int(N / 128) + 1, 128, 0, stream>>>(
         output, sum, x, y, z, x_mul, y_mul, z_mul);
     cudaFree(sum);
+#endif
 }

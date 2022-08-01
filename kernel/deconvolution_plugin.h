@@ -124,7 +124,6 @@ class DeconvolutionPlugin : public ConvolutionPlugin {
     int enqueue(
         int batchSize, const void* const* inputs, void* const* outputs,
         void* workspace, cudaStream_t stream) noexcept override {
-        std::cout << *this;
         // NOTE: deconv 还有一种等价的计算方法是: 针对 input 中 CHW 的每一个点,
         // 与 Chw 的 kernel 相乘并求和, 得到 hw 大小的数据, 平铺到输出的一个
         // feature map 中
